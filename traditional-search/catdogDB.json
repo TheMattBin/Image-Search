@@ -1,0 +1,124 @@
+{
+    "images": [
+        {
+            "id": 1,
+            "type": "cat",
+            "url": "images/cats/1.jpg",
+            "description": "A cute cat"
+        },
+        {
+            "id": 2,
+            "type": "cat",
+            "url": "images/cats/2.jpg",
+            "description": "A playful cat"
+        },
+        {
+            "id": 3,
+            "type": "dog",
+            "url": "images/dogs/1.jpg",
+            "description": "A friendly dog"
+        },
+        {
+            "id": 4,
+            "type": "dog",
+            "url": "images/dogs/2.jpg",
+            "description": "A loyal dog"
+        },
+        {
+            "id": 5,
+            "type": "cat",
+            "url": "images/cats/3.jpg",
+            "description": "A sleepy cat"
+        },
+        {
+            "id": 6,
+            "type": "cat",
+            "url": "images/cats/4.jpg",
+            "description": "A curious cat"
+        },
+        {
+            "id": 7,
+            "type": "cat",
+            "url": "images/cats/5.jpg",
+            "description": "A fluffy cat"
+        },
+        {
+            "id": 8,
+            "type": "cat",
+            "url": "images/cats/6.jpg",
+            "description": "A mischievous cat"
+        },
+        {
+            "id": 9,
+            "type": "cat",
+            "url": "images/cats/7.jpg",
+            "description": "A lazy cat"
+        },
+        {
+            "id": 10,
+            "type": "cat",
+            "url": "images/cats/8.jpg",
+            "description": "A playful kitten"
+        },
+        {
+            "id": 11,
+            "type": "cat",
+            "url": "images/cats/9.jpg",
+            "description": "A grumpy cat"
+        },
+        {
+            "id": 12,
+            "type": "cat",
+            "url": "images/cats/10.jpg",
+            "description": "A happy cat"
+        },
+        {
+            "id": 13,
+            "type": "dog",
+            "url": "images/dogs/3.jpg",
+            "description": "A playful dog"
+        },
+        {
+            "id": 14,
+            "type": "dog",
+            "url": "images/dogs/4.jpg",
+            "description": "A sleepy dog"
+        },
+        {
+            "id": 15,
+            "type": "dog",
+            "url": "images/dogs/5.jpg",
+            "description": "A curious dog"
+        },
+        {
+            "id": 16,
+            "type": "dog",
+            "url": "images/dogs/6.jpg",
+            "description": "A fluffy dog"
+        },
+        {
+            "id": 17,
+            "type": "dog",
+            "url": "images/dogs/7.jpg",
+            "description": "A mischievous dog"
+        },
+        {
+            "id": 18,
+            "type": "dog",
+            "url": "images/dogs/8.jpg",
+            "description": "A lazy dog"
+        },
+        {
+            "id": 19,
+            "type": "dog",
+            "url": "images/dogs/9.jpg",
+            "description": "A playful puppy"
+        },
+        {
+            "id": 20,
+            "type": "dog",
+            "url": "images/dogs/10.jpg",
+            "description": "A happy dog"
+        }
+    ]
+}
