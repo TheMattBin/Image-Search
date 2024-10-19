@@ -2,6 +2,7 @@
 
 
 ## Structure
+```
 /search-engine-app
 │
 ├── /src                     # Source code for the application
@@ -22,3 +23,4 @@
 ├── requirements.txt         # Python dependencies (if using Python)
 ├── README.md                # Project overview and setup instructions
 └── LICENSE                  # License information for the project
+```
