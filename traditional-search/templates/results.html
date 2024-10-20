@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search Results</title>
+</head>
+
+<body>
+    <h1>Search Results</h1>
+    <a href="/">Back to Search</a>
+
+    <div>
+        {% if results %}
+        {% for result in results %}
+        <div>
+            <h3>{{ result['description'] }}</h3>
+            <img src="{{ result['url'] }}" alt="{{ result['description'] }}" style="width:200px;height:auto;">
+        </div>
+        {% endfor %}
+        {% else %}
+        <p>No results found.</p>
+        {% endif %}
+    </div>
+</body>
+
+</html>

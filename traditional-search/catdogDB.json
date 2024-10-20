@@ -3,7 +3,7 @@
         {
             "id": 1,
             "type": "cat",
-            "url": "images/cats/1.jpg",
+            "url": "./images/cats/1.jpg",
             "description": "A cute cat"
         },
         {
