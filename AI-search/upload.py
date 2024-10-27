@@ -1,41 +1,50 @@
-import os
-import zipfile
 import gradio as gr
-from PIL import Image
+import zipfile
+import os
+import shutil
 
-def process_images(files):
-    # List to hold processed images
+# Define a single directory for all processed images
+PROCESSED_DIR = "processed_images"
+
+# Create the directory if it doesn't exist
+os.makedirs(PROCESSED_DIR, exist_ok=True)
+
+def process_files(files):
     processed_images = []
     
     for file in files:
-        if file.endswith('.zip'):
-            # If the uploaded file is a zip, extract it
+        print(file)
+        # Determine the file path for saving
+        file_path = os.path.join(PROCESSED_DIR, os.path.basename(file.name))
+        print(file_path)
+        
+        if file.name.endswith('.zip'):
+            # Extract zip file to the same directory
             with zipfile.ZipFile(file, 'r') as zip_ref:
-                zip_ref.extractall("extracted_images")
-                # Process each image in the extracted folder
-                for img_file in os.listdir("extracted_images"):
-                    img_path = os.path.join("extracted_images", img_file)
-                    processed_images.append(process_image(img_path))
+                zip_ref.extractall(PROCESSED_DIR)
+                
+                # Traverse the extracted directory for images
+                for root, dirs, files in os.walk(PROCESSED_DIR):
+                    for img_file in files:
+                        if img_file.endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):  # Check for image formats
+                            img_path = os.path.join(root, img_file)
+                            processed_images.append(img_path)  # Add image path for processing
+        
         else:
-            # Process individual image files
-            processed_images.append(process_image(file))
+            # Copy individual image files directly to PROCESSED_DIR
+            shutil.copy(file, file_path)  # Use shutil.copy to copy the file
+            processed_images.append(file_path)  # Add individual image path for processing
     
     return processed_images
 
-def process_image(image_path):
-    # Open and process the image (example: convert to grayscale)
-    img = Image.open(image_path)
-    img = img.convert("L")  # Convert to grayscale (you can modify this)
-    return img
 
 with gr.Blocks() as demo:
     gr.Markdown("## Upload Images or Zip Files")
     
-    with gr.Row():
-        upload_button = gr.UploadButton("Upload Images or Zip File", file_types=["image", "zip"], file_count="multiple")
-        output_gallery = gr.Gallery(label="Processed Images").style(grid=[2])
+    upload_button = gr.File(label="Upload Images or Zip File", file_count="multiple")
+    output_gallery = gr.Gallery(label="Processed Images")
     
-    upload_button.upload(process_images, upload_button, output_gallery)
+    upload_button.upload(process_files, upload_button, output_gallery)
 
 if __name__ == "__main__":
     demo.launch()
