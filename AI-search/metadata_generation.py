@@ -1,10 +1,7 @@
-# import requests
-# import os
-# import json
-
-# from PIL import Image
 from transformers import AutoProcessor, AutoModelForCausalLM 
 import torch
+from typing import Optional
+from PIL import Image
 
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
@@ -12,23 +9,25 @@ torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
 model = AutoModelForCausalLM.from_pretrained("microsoft/Florence-2-large-ft", torch_dtype=torch_dtype, trust_remote_code=True).to(device)
 processor = AutoProcessor.from_pretrained("microsoft/Florence-2-large-ft", trust_remote_code=True)
 
-def run_example(task_prompt, text_input=None, image=None):
-    if text_input is None:
-        prompt = task_prompt
-    else:
-        prompt = task_prompt + text_input
-    inputs = processor(text=prompt, images=image, return_tensors="pt").to(device, torch_dtype)
-    generated_ids = model.generate(
-      input_ids=inputs["input_ids"],
-      pixel_values=inputs["pixel_values"],
-      max_new_tokens=1024,
-      num_beams=3
-    )
-    generated_text = processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
+def run_example(task_prompt: str, text_input: Optional[str] = None, image: Optional[Image.Image] = None) -> dict:
+  if text_input is None:
+    prompt = task_prompt
+  else:
+    prompt = task_prompt + text_input
 
-    parsed_answer = processor.post_process_generation(generated_text, task=task_prompt, image_size=(image.width, image.height))
+  inputs = processor(text=prompt, images=image, return_tensors="pt").to(device, torch_dtype)
+  generated_ids = model.generate(
+    input_ids=inputs["input_ids"],
+    pixel_values=inputs["pixel_values"],
+    max_new_tokens=1024,
+    num_beams=3
+  )
+  generated_text = processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
 
-    print(parsed_answer)
+  parsed_answer = processor.post_process_generation(generated_text, task=task_prompt, image_size=(image.width, image.height))
+
+  print(parsed_answer)
+  return parsed_answer
 
 
 # prompt = "<MORE_DETAILED_CAPTION>"

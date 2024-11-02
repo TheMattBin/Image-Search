@@ -13,6 +13,7 @@ PROCESSED_DIR = "processed_images"
 # Create the directory if it doesn't exist
 os.makedirs(PROCESSED_DIR, exist_ok=True)
 
+#TODO: Group all uploaded files into a desinated folder
 def process_files(files):
     new_metadata = []
     prompt = "<MORE_DETAILED_CAPTION>"
