@@ -11,6 +11,8 @@ For RAG using VLM to retrieve metadata
 ## References
 - [Reference](https://github.com/gcui-art/album-ai/tree/main)
 - [Reference2](https://github.com/hv0905/NekoImageGallery?tab=readme-ov-file)
+- [Reference 3](https://medium.com/@myscale/building-a-multi-modal-image-search-application-with-myscale-43b2159e0941)
+- [Reference 4](https://towardsdatascience.com/getting-started-with-weaviate-a-beginners-guide-to-search-with-vector-databases-14bbb9285839)
 
 ### How to run Docker in Colab
 
