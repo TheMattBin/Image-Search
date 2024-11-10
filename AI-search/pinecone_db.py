@@ -1,10 +1,12 @@
 import os
 from dotenv import load_dotenv
 from PIL import Image
+
 import torch
-from torchvision import transforms
 from transformers import CLIPProcessor, CLIPModel
+
 from pinecone import Pinecone
+from metadata_generation import run_example
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -25,20 +27,33 @@ def load_clip_model():
 
 # Embed and index images
 def index_images(index, model, processor, image_paths):
+    prompt = "<MORE_DETAILED_CAPTION>"
+    text_input = "Extract metadata, such as image_id, image_title, image_description,image_date, image_resolution, \
+        image_orientation, image_tags, image_keywords, image_file_creation_date, and formatted in json."
+    
+    vectors = []
     for image_path in image_paths:
-        image = Image.open(image_path)
+        image = Image.open(image_path).convert("RGB")
         inputs = processor(images=image, return_tensors="pt", padding=True)
+        metadata = run_example(prompt, text_input, image)
         with torch.no_grad():
             embeddings = model.get_image_features(**inputs)
 
         # Convert embeddings to a list and upsert to Pinecone
         vector = embeddings[0].tolist()
-        index.upsert(vectors=[(image_path, vector)])
+
+        vectors.append({
+            "id": image_path,  # Use the image path as the ID
+            "values": vector,
+            "metadata": metadata
+        })
+        
+    index.upsert(vectors=vectors)
 
 
 # Query similar images
 def query_images(index, model, processor, query_image_path):
-    query_image = Image.open(query_image_path)
+    query_image = Image.open(query_image_path).convert("RGB")
     inputs = processor(images=query_image, return_tensors="pt", padding=True)
 
     with torch.no_grad():
@@ -46,28 +61,27 @@ def query_images(index, model, processor, query_image_path):
 
     query = query_embedding.squeeze().tolist()
 
-    # Query Pinecone for similar images
-    # Leave "" for default namespace
+    # Query Pinecone for similar images, leave "" for default namespace
     results = index.query(vector=query, top_k=5, include_values=True)  # Get top 5 similar images
 
     return results
 
+#TODO: Combine the two scripts (upload.py) into one script
+# # Main function to run the script
+# if __name__ == "__main__":
+#     index = init_pinecone()
 
-# Main function to run the script
-if __name__ == "__main__":
-    index = init_pinecone()
+#     # Load the CLIP model and processor
+#     model, processor = load_clip_model()
 
-    # Load the CLIP model and processor
-    model, processor = load_clip_model()
+#     # Specify paths to your images for indexing
+#     image_paths = ['./data/9.jpg', './data/10.jpg']  # Add your image paths here
+#     index_images(index, model, processor, image_paths)
 
-    # Specify paths to your images for indexing
-    image_paths = ['./data/9.jpg', './data/10.jpg']  # Add your image paths here
-    index_images(index, model, processor, image_paths)
+#     # Query with a specific image
+#     query_image_path = './data/6.jpg'  # Path to your query image
+#     similar_images = query_images(index, model, processor, query_image_path)
 
-    # Query with a specific image
-    query_image_path = './data/6.jpg'  # Path to your query image
-    similar_images = query_images(index, model, processor, query_image_path)
-
-    print("Similar Images:")
-    for match in similar_images['matches']:
-        print(f"Image ID: {match['id']}, Score: {match['score']}")
+#     print("Similar Images:")
+#     for match in similar_images['matches']:
+#         print(f"Image ID: {match['id']}, Score: {match['score']}")

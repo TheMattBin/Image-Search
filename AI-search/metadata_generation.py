@@ -1,7 +1,7 @@
-from transformers import AutoProcessor, AutoModelForCausalLM 
-import torch
 from typing import Optional
 from PIL import Image
+import torch
+from transformers import AutoProcessor, AutoModelForCausalLM 
 
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
@@ -26,7 +26,6 @@ def run_example(task_prompt: str, text_input: Optional[str] = None, image: Optio
 
   parsed_answer = processor.post_process_generation(generated_text, task=task_prompt, image_size=(image.width, image.height))
 
-  print(parsed_answer)
   return parsed_answer
 
 
