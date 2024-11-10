@@ -1,2 +1,3 @@
 # Ignore processed images
 /processed_images
+.env
