@@ -26,6 +26,7 @@ def load_clip_model():
 
 
 # Embed and index images
+#TODO: Add metadata extraction by LLM
 def index_images(index, model, processor, image_paths):
     prompt = "<MORE_DETAILED_CAPTION>"
     text_input = "Extract metadata, such as image_id, image_title, image_description,image_date, image_resolution, \
@@ -52,7 +53,7 @@ def index_images(index, model, processor, image_paths):
 
 
 # Query similar images
-def query_images(index, model, processor, query_image_path):
+def query_images(index, model, processor, query_image_path, top_k):
     query_image = Image.open(query_image_path).convert("RGB")
     inputs = processor(images=query_image, return_tensors="pt", padding=True)
 
@@ -62,7 +63,7 @@ def query_images(index, model, processor, query_image_path):
     query = query_embedding.squeeze().tolist()
 
     # Query Pinecone for similar images, leave "" for default namespace
-    results = index.query(vector=query, top_k=5, include_values=True)  # Get top 5 similar images
+    results = index.query(vector=query, top_k=top_k, include_values=True)  # Get top 5 similar images
 
     return results
 
