@@ -4,9 +4,9 @@ For RAG using VLM to retrieve metadata
 - [x] Image search
 - [x] Search by query with LLM supported - by metadata
 - [ ] Include OCR
-- [ ] VectorDB, adding metadata by VLM
+- [x] VectorDB, adding metadata by VLM
 - [x] Direct search with vectorDB
-- [ ] Integration
+- [ ] Integration, showing images by app
 
 ## References
 - [Reference](https://github.com/gcui-art/album-ai/tree/main)
