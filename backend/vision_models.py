@@ -18,8 +18,6 @@ class VisionModels:
         self.clip_model = CLIPModel.from_pretrained(self.clip_model_id).to(self.device)
 
     def generate_caption(self, image: Union[str, Image.Image]) -> str:
-        if isinstance(image, str):
-            image = Image.open(image).convert("RGB")
         messages = [{
             "role": "user",
             "content": [

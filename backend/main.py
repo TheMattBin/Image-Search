@@ -18,10 +18,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import os
+
 @app.post("/index-image/")
 async def index_image(image: UploadFile = File(...)):
     # Save uploaded file to disk or read as bytes
-    image_path = f"/tmp/{image.filename}"
+    os.makedirs("./tmp", exist_ok=True)
+    image_path = f"./tmp/{image.filename}"
     with open(image_path, "wb") as f:
         f.write(await image.read())
     caption = vision.generate_caption(image_path)
@@ -36,7 +39,8 @@ def search_by_text(query: str):
 
 @app.post("/search-by-image/")
 async def search_by_image(image: UploadFile = File(...)):
-    image_path = f"/tmp/{image.filename}"
+    os.makedirs("./tmp", exist_ok=True)
+    image_path = f"./tmp/{image.filename}"
     with open(image_path, "wb") as f:
         f.write(await image.read())
     embedding = vision.extract_embedding(image_path)

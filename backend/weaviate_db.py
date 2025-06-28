@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 
 import weaviate
 from weaviate.classes.init import Auth
+from weaviate.util import generate_uuid5
 
 class WeaviateImageDB:
     def __init__(self) -> None:
@@ -27,7 +28,7 @@ class WeaviateImageDB:
         return imgObject.data.insert(
             properties=data_object,
             vector=embedding,
-            uuid=image_id
+            uuid=generate_uuid5(data_object)
         )
 
     def query_by_vector(self, embedding: List[float], limit: int = 3):
