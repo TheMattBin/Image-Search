@@ -1,11 +1,22 @@
 # main.py
 from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
+
 from weaviate_db import WeaviateImageDB
 from vision_models import VisionModels
+
 
 app = FastAPI()
 db = WeaviateImageDB()
 vision = VisionModels()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Or specify your frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.post("/index-image/")
 async def index_image(image: UploadFile = File(...)):
