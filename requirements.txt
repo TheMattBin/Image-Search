@@ -1,0 +1,9 @@
+transformers
+pillow
+Flask
+weaviate-client
+python-dotenv
+huggingface_hub[hf_xet]
+fastapi
+uvicorn
+python-multipart
