@@ -4,9 +4,7 @@ from dotenv import load_dotenv
 
 import weaviate
 from weaviate.classes.init import Auth
-# from weaviate.collections import Property, CollectionConfig
-# from weaviate.collections import Collection
-from weaviate.util import generate_uuid5  # Generate a deterministic ID
+from weaviate.util import generate_uuid5
 
 import torch
 from transformers import AutoProcessor, AutoModelForImageTextToText, AutoConfig
@@ -88,31 +86,21 @@ def extract_embedding(image) -> list:
     embedding = image_features.cpu().numpy().flatten().tolist()
     return embedding
 
-def encode_text_for_query(text: str) -> list:
-    """Encodes a text query into an embedding using SmolVLM2's text encoder."""
-    # SmolVLM2 uses SmolLM2 as its language backbone [2].
-    # We need to get the text embedding from this language model.
-    # This might involve passing a simple message like "query: <text>" and getting the LM's hidden state.
+# def encode_text_for_query(text: str) -> list:
+#     """Encodes a text query into an embedding using SmolVLM2's text encoder."""
     
-    # A common way to get text embeddings from VLMs that also have a text encoder (like SmolVLM)
-    # is to use the model's text processing component.
-    # We can use the processor to prepare the text and then pass it to the text backbone.
+#     messages = [
+#         {"role": "user", "content": text}
+#     ]
+#     inputs = processor(messages=messages, return_tensors="pt").to(device)
     
-    # SmolVLM is a CausalLM, so direct text embedding extraction might be different from CLIP.
-    # One approach: encode text, get the last hidden state of the text tokens, and pool it.
-    
-    messages = [
-        {"role": "user", "content": text}
-    ]
-    inputs = processor(messages=messages, return_tensors="pt").to(device)
-    
-    with torch.no_grad():
-        outputs = model.model(input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"])
+#     with torch.no_grad():
+#         outputs = model.model(input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"])
         
-        # Assuming the embedding dimension is EMBEDDING_DIM
-        text_embedding = outputs.last_hidden_state[:, -1, :].squeeze().cpu().numpy().tolist()
+#         # Assuming the embedding dimension is EMBEDDING_DIM
+#         text_embedding = outputs.last_hidden_state[:, -1, :].squeeze().cpu().numpy().tolist()
         
-    return text_embedding
+#     return text_embedding
 
 def push_to_weaviate(image_id: str, embedding: list, caption: str, image_url: str = ""):
     collection_name = "ImageObject"
@@ -127,46 +115,6 @@ def push_to_weaviate(image_id: str, embedding: list, caption: str, image_url: st
         vector=embedding,
         uuid=generate_uuid5(data_object)
     )
-
-    # properties = [
-    #     Property(name="caption", data_type="text"),
-    #     Property(name="imageUrl", data_type="string"),
-    # ]
-
-    # # Define collection config without VectorIndexConfig (pass vector_index_config as dict)
-    # config = CollectionConfig(
-    #     properties=properties,
-    #     vector_index_config={
-    #         "distance": "cosine"
-    #     }
-    # )
-
-    # try:
-    #     # Check if collection exists
-    #     if collection_name not in client.collections.list_all():
-    #         # Create collection with config
-    #         client.collections.create(collection_name, config)
-    #         print(f"Created Weaviate collection: {collection_name}")
-    #     else:
-    #         print(f"Collection {collection_name} already exists.")
-
-    #     # Get collection object
-    #     collection: Collection = client.collections.get(collection_name)
-
-    #     # Insert data object with vector embedding and properties
-    #     collection.data.insert(
-    #         properties={
-    #             "caption": caption,
-    #             "imageUrl": image_url,
-    #         },
-    #         vector=embedding,
-    #         uuid=image_id,
-    #     )
-    #     print(f"Image data for ID {image_id} pushed to Weaviate successfully.")
-
-    # except Exception as e:
-    #     print(f"Error pushing data to Weaviate: {e}")
-
 
 # Example usage
 if __name__ == "__main__":
@@ -202,64 +150,3 @@ if __name__ == "__main__":
         print(f"Error during image processing or indexing: {e}")
     finally:
         client.close()
-
-    print("\n--- Part 2: Querying Weaviate ---")
-
-    # --- Text Query Example ---
-    query_text = "a cat playing in the park"
-    try:
-        text_query_embedding = encode_text_for_query(query_text)
-        print(f"Encoded text query '{query_text}' to embedding with dimension: {len(text_query_embedding)}")
-
-        # Perform vector similarity search in Weaviate
-        # The .near_vector() method is used for vector similarity search
-        # Pass the text query embedding as the vector to search for.
-        
-        # Weaviate's `near_vector` expects a dictionary with `vector` key
-        # and optionally `distance` or `certainty`.
-        
-        results_text_query = (
-            client.query.get("ImageObject", ["caption", "imageUrl"])
-            .with_near_vector({"vector": text_query_embedding})
-            .with_limit(3) # Get top 3 similar images
-            .do()
-        )
-        print(f"\nResults for text query '{query_text}':")
-        if "data" in results_text_query and "Get" in results_text_query["data"] and "ImageObject" in results_text_query["data"]["Get"]:
-            for i, item in enumerate(results_text_query["data"]["Get"]["ImageObject"]):
-                print(f"  Result {i+1}: Caption: '{item['caption']}', Image URL: '{item['imageUrl']}'")
-        else:
-            print("No results found for text query.")
-
-    except NotImplementedError as e:
-        print(f"Skipping text query: {e}")
-    except Exception as e:
-        print(f"Error during text query: {e}")
-
-    # --- Image Query Example ---
-    # query_image_path = "path/to/your/query_image.jpg" # <--- IMPORTANT: Change this to your query image file
-    # if not os.path.exists(query_image_path):
-    #     print(f"Error: Query image file not found at {query_image_path}. Please update 'query_image_path'.")
-    # else:
-    #     try:
-    #         query_image = Image.open(query_image_path).convert("RGB")
-    #         image_query_embedding = extract_embedding(query_image)
-    #         print(f"Extracted embedding for query image with dimension: {len(image_query_embedding)}")
-
-    #         results_image_query = (
-    #             client.query.get("ImageObject", ["caption", "imageUrl"])
-    #             .with_near_vector({"vector": image_query_embedding})
-    #             .with_limit(3) # Get top 3 similar images
-    #             .do()
-    #         )
-    #         print(f"\nResults for image query (from {query_image_path}):")
-    #         if "data" in results_image_query and "Get" in results_image_query["data"] and "ImageObject" in results_image_query["data"]["Get"]:
-    #             for i, item in enumerate(results_image_query["data"]["Get"]["ImageObject"]):
-    #                 print(f"  Result {i+1}: Caption: '{item['caption']}', Image URL: '{item['imageUrl']}'")
-    #         else:
-    #             print("No results found for image query.")
-    #     except NotImplementedError as e:
-    #         print(f"Skipping image query: {e}")
-    #     except Exception as e:
-    #         print(f"Error during image query: {e}")
-
