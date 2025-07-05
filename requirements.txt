@@ -7,3 +7,5 @@ huggingface_hub[hf_xet]
 fastapi
 uvicorn
 python-multipart
+flickrapi
+tqdm
