@@ -205,7 +205,7 @@ jobs:
         with:
           script: |
             const { owner, repo, number: pull_number } = context.issue;
-            const reason = '${{ steps.auto-merge-decision.outputs.reason }}';
+            const reason = "${{ steps.auto-merge-decision.outputs.reason }}";
 
             await github.rest.issues.createComment({
               owner,
