@@ -1,0 +1,101 @@
+name: Dependabot Auto-merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+
+    steps:
+      - name: Wait for checks to complete
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { owner, repo, number: pull_number } = context.issue;
+            const maxWaitTime = 10 * 60 * 1000; // 10 minutes
+            const checkInterval = 30000; // 30 seconds
+            let attempts = 0;
+
+            console.log(`🔍 Waiting for checks on PR #${pull_number}...`);
+
+            while (attempts < maxWaitTime / checkInterval) {
+              attempts++;
+
+              try {
+                // Get combined status for the PR
+                const { data: combinedStatus } = await github.rest.repos.getCombinedStatusForRef({
+                  owner,
+                  repo,
+                  ref: context.payload.pull_request.head.sha,
+                });
+
+                console.log(`📊 Status check: ${combinedStatus.state}`);
+
+                if (combinedStatus.state === 'success') {
+                  console.log('✅ All checks passed!');
+                  return;
+                } else if (combinedStatus.state === 'failure') {
+                  console.log('❌ Some checks failed');
+                  core.setFailed('Status checks failed');
+                  return;
+                }
+              } catch (error) {
+                console.log(`⚠️  Error checking status: ${error.message}`);
+              }
+
+              console.log(`⏳ Waiting... (attempt ${attempts})`);
+              await new Promise(resolve => setTimeout(resolve, checkInterval));
+            }
+
+            console.log('⏰ Timeout waiting for status checks');
+            core.setFailed('Timeout waiting for status checks');
+
+      - name: Get Dependabot metadata
+        id: dependabot-metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Auto-merge if safe
+        if: steps.dependabot-metadata.outputs.update-type == 'version-update:semver-patch' || steps.dependabot-metadata.outputs.update-type == 'version-update:semver-minor' || contains(github.event.pull_request.title, 'security')
+        run: |
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          UPDATE_TYPE="${{ steps.dependabot-metadata.outputs.update-type }}"
+
+          echo "🔄 Auto-merging Dependabot PR: $UPDATE_TYPE"
+
+          # Approve the PR
+          gh pr review --approve "$PR_URL"
+
+          # Enable auto-merge
+          gh pr merge --auto --squash "$PR_URL"
+
+          echo "✅ Auto-merge enabled for PR"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on auto-merge
+        if: steps.dependabot-metadata.outputs.update-type == 'version-update:semver-patch' || steps.dependabot-metadata.outputs.update-type == 'version-update:semver-minor' || contains(github.event.pull_request.title, 'security')
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { owner, repo, number: pull_number } = context.issue;
+            const updateType = '${{ steps.dependabot-metadata.outputs.update-type }}';
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: pull_number,
+              body: `🤖 This Dependabot PR has been automatically approved and enabled for auto-merge.
+
+**Update Type:** ${updateType}
+**PR:** #${pull_number}`
+            });
