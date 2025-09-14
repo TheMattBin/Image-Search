@@ -1,0 +1,210 @@
+name: Auto-merge Human PRs
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
+
+    steps:
+      - name: Wait for checks to complete
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { owner, repo, number: pull_number } = context.issue;
+            const maxWaitTime = 15 * 60 * 1000; // 15 minutes
+            const checkInterval = 30000; // 30 seconds
+            let attempts = 0;
+
+            console.log(`🔍 Waiting for checks on PR #${pull_number}...`);
+
+            while (attempts < maxWaitTime / checkInterval) {
+              attempts++;
+
+              try {
+                // Get combined status for the PR
+                const { data: combinedStatus } = await github.rest.repos.getCombinedStatusForRef({
+                  owner,
+                  repo,
+                  ref: context.payload.pull_request.head.sha,
+                });
+
+                console.log(`📊 Status check: ${combinedStatus.state}`);
+
+                if (combinedStatus.state === 'success') {
+                  console.log('✅ All checks passed!');
+                  return;
+                } else if (combinedStatus.state === 'failure') {
+                  console.log('❌ Some checks failed');
+                  core.setFailed('Status checks failed');
+                  return;
+                }
+              } catch (error) {
+                console.log(`⚠️  Error checking status: ${error.message}`);
+              }
+
+              console.log(`⏳ Waiting... (attempt ${attempts})`);
+              await new Promise(resolve => setTimeout(resolve, checkInterval));
+            }
+
+            console.log('⏰ Timeout waiting for status checks');
+            core.setFailed('Timeout waiting for status checks');
+
+      - name: Check PR requirements
+        id: check-pr
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { owner, repo, number: pull_number } = context.issue;
+
+            try {
+              // Get PR details
+              const { data: pr } = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: pull_number
+              });
+
+              // Check if PR has merge conflicts
+              if (pr.mergeable === false || pr.mergeable_state === 'dirty') {
+                console.log('❌ PR has merge conflicts');
+                core.setOutput('can-merge', 'false');
+                core.setOutput('reason', 'merge-conflicts');
+                return;
+              }
+
+              // Check if PR is draft
+              if (pr.draft) {
+                console.log('❌ PR is in draft state');
+                core.setOutput('can-merge', 'false');
+                core.setOutput('reason', 'draft-pr');
+                return;
+              }
+
+              // Check for required labels (optional)
+              const requiredLabels = ['ready-for-merge', 'automerge'];
+              const hasRequiredLabel = pr.labels.some(label => requiredLabels.includes(label.name.toLowerCase()));
+
+              if (!hasRequiredLabel) {
+                console.log('⚠️  PR missing required labels (ready-for-merge or automerge)');
+                core.setOutput('can-merge', 'false');
+                core.setOutput('reason', 'missing-labels');
+                return;
+              }
+
+              // Check for blocking labels
+              const blockingLabels = ['do-not-merge', 'work-in-progress', 'wip'];
+              const hasBlockingLabel = pr.labels.some(label => blockingLabels.includes(label.name.toLowerCase()));
+
+              if (hasBlockingLabel) {
+                console.log('❌ PR has blocking labels');
+                core.setOutput('can-merge', 'false');
+                core.setOutput('reason', 'blocking-labels');
+                return;
+              }
+
+              console.log('✅ PR meets all requirements for auto-merge');
+              core.setOutput('can-merge', 'true');
+              core.setOutput('reason', '');
+
+            } catch (error) {
+              console.error(`❌ Error checking PR: ${error.message}`);
+              core.setOutput('can-merge', 'false');
+              core.setOutput('reason', 'error');
+            }
+
+      - name: Auto-merge PR
+        if: steps.check-pr.outputs.can-merge == 'true'
+        run: |
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+
+          echo "🔄 Auto-merging PR #$PR_NUMBER"
+
+          # Approve the PR
+          gh pr review --approve "$PR_URL"
+
+          # Enable auto-merge with squash
+          gh pr merge --auto --squash "$PR_URL"
+
+          echo "✅ Auto-merge enabled for PR #$PR_NUMBER"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on auto-merge
+        if: steps.check-pr.outputs.can-merge == 'true'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { owner, repo, number: pull_number } = context.issue;
+            const prAuthor = context.payload.pull_request.user.login;
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: pull_number,
+              body: `🤖 **Auto-merge Enabled**
+
+This PR has been automatically approved and enabled for auto-merge since all checks passed and requirements are met.
+
+**PR:** #${pull_number}
+**Author:** @${prAuthor}
+**Status:** All checks passed ✅
+**Merge Method:** Squash
+
+The PR will be automatically merged once any branch protection rules are satisfied.`
+            });
+
+      - name: Comment on requirements not met
+        if: steps.check-pr.outputs.can-merge == 'false'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { owner, repo, number: pull_number } = context.issue;
+            const reason = '${{ steps.check-pr.outputs.reason }}';
+            const prAuthor = context.payload.pull_request.user.login;
+
+            let message = `🤖 **Auto-merge Requirements Not Met**
+
+This PR cannot be automatically merged for the following reason:
+
+**Reason:** ${reason}
+**PR:** #${pull_number}
+**Author:** @${prAuthor}`;
+
+            if (reason === 'missing-labels') {
+              message += `
+
+**To enable auto-merge:**
+1. Add one of these labels: \`ready-for-merge\` or \`automerge\`
+2. Ensure no blocking labels are present (like \`do-not-merge\` or \`wip\`)
+3. All status checks must pass`;
+            } else if (reason === 'merge-conflicts') {
+              message += `
+
+**To resolve:**
+1. Resolve merge conflicts locally
+2. Push the resolved changes to the PR branch
+3. Ensure all status checks pass`;
+            } else if (reason === 'draft-pr') {
+              message += `
+
+**To resolve:**
+1. Mark the PR as "Ready for review"
+2. Ensure all status checks pass`;
+            }
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: pull_number,
+              body: message
+            });
