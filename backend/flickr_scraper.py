@@ -42,7 +42,8 @@ def get_urls(search="honeybees on flowers", n=10, download=False):
                     download_uri(url, dir_path)
 
                 urls.append(url)
-                print(f"{i}/{n} {url}")
+                # Avoid logging the full URL as it may contain the photo 'secret'.
+                print(f"{i}/{n} photo_id={photo.get('id')}")
             except Exception:
                 print(f"{i}/{n} error...")
 
