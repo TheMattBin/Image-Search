@@ -94,8 +94,9 @@ jobs:
               owner,
               repo,
               issue_number: pull_number,
-              body: `🤖 This Dependabot PR has been automatically approved and enabled for auto-merge.
+              body: |-
+              🤖 This Dependabot PR has been automatically approved and enabled for auto-merge.
 
-**Update Type:** ${updateType}
-**PR:** #${pull_number}`
+              **Update Type:** ${updateType}
+              **PR:** #${pull_number}
             });

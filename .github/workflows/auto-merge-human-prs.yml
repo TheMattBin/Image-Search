@@ -151,16 +151,7 @@ jobs:
               owner,
               repo,
               issue_number: pull_number,
-              body: `🤖 **Auto-merge Enabled**
-
-This PR has been automatically approved and enabled for auto-merge since all checks passed and requirements are met.
-
-**PR:** #${pull_number}
-**Author:** @${prAuthor}
-**Status:** All checks passed ✅
-**Merge Method:** Squash
-
-The PR will be automatically merged once any branch protection rules are satisfied.`
+              body: `🤖 **Auto-merge Enabled**\n\nThis PR has been automatically approved and enabled for auto-merge since all checks passed and requirements are met.\n\n**PR:** #${pull_number}\n**Author:** @${prAuthor}\n**Status:** All checks passed ✅\n**Merge Method:** Squash\n\nThe PR will be automatically merged once any branch protection rules are satisfied.`
             });
 
       - name: Comment on requirements not met
@@ -172,34 +163,14 @@ The PR will be automatically merged once any branch protection rules are satisfi
             const reason = '${{ steps.check-pr.outputs.reason }}';
             const prAuthor = context.payload.pull_request.user.login;
 
-            let message = `🤖 **Auto-merge Requirements Not Met**
-
-This PR cannot be automatically merged for the following reason:
-
-**Reason:** ${reason}
-**PR:** #${pull_number}
-**Author:** @${prAuthor}`;
+            let message = `🤖 **Auto-merge Requirements Not Met**\n\nThis PR cannot be automatically merged for the following reason:\n\n**Reason:** ${reason}\n**PR:** #${pull_number}\n**Author:** @${prAuthor}`;
 
             if (reason === 'missing-labels') {
-              message += `
-
-**To enable auto-merge:**
-1. Add one of these labels: \`ready-for-merge\` or \`automerge\`
-2. Ensure no blocking labels are present (like \`do-not-merge\` or \`wip\`)
-3. All status checks must pass`;
+              message += `\n\n**To enable auto-merge:**\n1. Add one of these labels: \`ready-for-merge\` or \`automerge\`\n2. Ensure no blocking labels are present (like \`do-not-merge\` or \`wip\`)\n3. All status checks must pass`;
             } else if (reason === 'merge-conflicts') {
-              message += `
-
-**To resolve:**
-1. Resolve merge conflicts locally
-2. Push the resolved changes to the PR branch
-3. Ensure all status checks pass`;
+              message += `\n\n**To resolve:**\n1. Resolve merge conflicts locally\n2. Push the resolved changes to the PR branch\n3. Ensure all status checks pass`;
             } else if (reason === 'draft-pr') {
-              message += `
-
-**To resolve:**
-1. Mark the PR as "Ready for review"
-2. Ensure all status checks pass`;
+              message += `\n\n**To resolve:**\n1. Mark the PR as "Ready for review"\n2. Ensure all status checks pass`;
             }
 
             await github.rest.issues.createComment({

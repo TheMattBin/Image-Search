@@ -75,22 +75,23 @@ jobs:
                 owner,
                 repo,
                 issue_number: pull_number,
-                body: `⚠️ **Merge Conflict Detected**
+                body: |-
+              ⚠️ **Merge Conflict Detected**
 
-This PR has merge conflicts and cannot be merged automatically.
+              This PR has merge conflicts and cannot be merged automatically.
 
-**PR:** #${pull_number}
-**Title:** "${{ steps.check-conflicts.outputs.pr-title }}"
-**Branch:** ${{ steps.check-conflicts.outputs.pr-branch }}
+              **PR:** #${pull_number}
+              **Title:** "${{ steps.check-conflicts.outputs.pr-title }}"
+              **Branch:** ${{ steps.check-conflicts.outputs.pr-branch }}
 
-This PR will be automatically closed and a fresh one will be created by Dependabot to resolve the conflicts.
+              This PR will be automatically closed and a fresh one will be created by Dependabot to resolve the conflicts.
 
-🔄 **Next Steps:**
-1. This PR will be closed automatically
-2. Dependabot will create a fresh PR with the latest changes
-3. The new PR should be mergeable without conflicts
+              🔄 **Next Steps:**
+              1. This PR will be closed automatically
+              2. Dependabot will create a fresh PR with the latest changes
+              3. The new PR should be mergeable without conflicts
 
-**Note:** This automatic conflict resolution helps keep your dependencies up to date! 🤖`
+              **Note:** This automatic conflict resolution helps keep your dependencies up to date! 🤖
               });
 
               // Close the conflicting PR
