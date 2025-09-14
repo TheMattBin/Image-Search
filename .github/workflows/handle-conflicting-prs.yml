@@ -1,0 +1,150 @@
+name: Handle Conflicting PRs
+
+on:
+  pull_request:
+    types: [synchronize, labeled]
+  schedule:
+    # Every 4 hours
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-conflicts:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for merge conflicts
+        id: check-conflicts
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { owner, repo, number: pull_number } = context.issue;
+
+            try {
+              // Check if PR has merge conflicts
+              const { data: pr } = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: pull_number
+              });
+
+              if (pr.mergeable === false || pr.mergeable_state === 'dirty') {
+                console.log(`❌ PR #${pull_number} has merge conflicts`);
+                core.setOutput('has-conflicts', 'true');
+                core.setOutput('pr-title', pr.title);
+                core.setOutput('pr-user', pr.user.login);
+                core.setOutput('pr-branch', pr.head.ref);
+              } else {
+                console.log(`✅ PR #${pull_number} has no merge conflicts`);
+                core.setOutput('has-conflicts', 'false');
+              }
+            } catch (error) {
+              console.log(`⚠️  Could not check merge status: ${error.message}`);
+              core.setOutput('has-conflicts', 'false');
+            }
+
+      - name: Handle conflicting bot PR
+        if: steps.check-conflicts.outputs.has-conflicts == 'true' && startsWith(github.event.pull_request.user.login, 'dependabot')
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { owner, repo, number: pull_number } = context.issue;
+
+            console.log(`🔄 Processing conflicting Dependabot PR #${pull_number}`);
+
+            try {
+              // Add conflict label
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: pull_number,
+                labels: ['conflicts', 'needs-refresh', 'bot-pr']
+              });
+
+              // Comment about the conflict
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pull_number,
+                body: `⚠️ **Merge Conflict Detected**
+
+This PR has merge conflicts and cannot be merged automatically.
+
+**PR:** #${pull_number}
+**Title:** "${{ steps.check-conflicts.outputs.pr-title }}"
+**Branch:** ${{ steps.check-conflicts.outputs.pr-branch }}
+
+This PR will be automatically closed and a fresh one will be created by Dependabot to resolve the conflicts.
+
+🔄 **Next Steps:**
+1. This PR will be closed automatically
+2. Dependabot will create a fresh PR with the latest changes
+3. The new PR should be mergeable without conflicts
+
+**Note:** This automatic conflict resolution helps keep your dependencies up to date! 🤖`
+              });
+
+              // Close the conflicting PR
+              await github.rest.pulls.update({
+                owner,
+                repo,
+                pull_number: pull_number,
+                state: 'closed'
+              });
+
+              console.log(`✅ Closed conflicting PR #${pull_number}`);
+
+            } catch (error) {
+              console.error(`❌ Failed to handle conflicting PR: ${error.message}`);
+            }
+
+      - name: Schedule refresh for other bot PRs
+        if: steps.check-conflicts.outputs.has-conflicts == 'true' && !startsWith(github.event.pull_request.user.login, 'dependabot')
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { owner, repo, number: pull_number } = context.issue;
+
+            console.log(`🔄 Notifying about conflicts in non-Dependabot bot PR`);
+
+            try {
+              // Add conflict label
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: pull_number,
+                labels: ['conflicts', 'needs-attention']
+              });
+
+              // Comment about the conflict
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pull_number,
+                body: `⚠️ **Merge Conflict Detected**
+
+This PR from ${{ github.event.pull_request.user.login }} has merge conflicts and cannot be merged automatically.
+
+**PR:** #${pull_number}
+**Title:** "${{ steps.check-conflicts.outputs.pr-title }}"
+
+🔄 **Next Steps:**
+1. Please resolve the merge conflicts locally
+2. Push the resolved changes to the PR branch
+3. The PR will then be automatically merged if eligible
+
+Alternatively, you can close this PR and the bot will create a fresh one.`
+              });
+
+            } catch (error) {
+              console.error(`❌ Failed to comment on conflicting PR: ${error.message}`);
+            }

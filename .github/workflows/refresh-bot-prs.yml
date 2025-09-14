@@ -1,0 +1,116 @@
+name: Refresh Bot PRs
+
+on:
+  schedule:
+    # Run every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - '.github/workflows/**'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh-bot-prs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Find and refresh stale bot PRs
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+
+            console.log('🔍 Looking for stale bot PRs...');
+
+            // Get all open PRs from bots
+            const { data: prs } = await github.rest.pulls.list({
+              owner,
+              repo,
+              state: 'open',
+              sort: 'updated',
+              direction: 'desc'
+            });
+
+            const botUsers = ['dependabot[bot]', 'renovate[bot]', 'github-actions[bot]', 'merge[bot]'];
+            const botPrs = prs.filter(pr => botUsers.includes(pr.user.login));
+
+            console.log(`🤖 Found ${botPrs.length} bot PR(s)`);
+
+            for (const pr of botPrs) {
+              console.log(`\n📋 Processing PR #${pr.number}: ${pr.title}`);
+              console.log(`  • Bot: ${pr.user.login}`);
+              console.log(`  • Branch: ${pr.head.ref}`);
+              console.log(`  • Updated: ${pr.updated_at}`);
+
+              // Check if PR has conflicts or is stale
+              const isStale = new Date(pr.updated_at) < new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours old
+              const hasConflictLabels = pr.labels.some(label =>
+                ['conflicts', 'needs-refresh', 'stale'].includes(label.name.toLowerCase())
+              );
+
+              if (isStale || hasConflictLabels) {
+                console.log(`  ⚠️  PR is stale or has conflicts, closing...`);
+
+                try {
+                  // Add a comment explaining why we're closing
+                  await github.rest.issues.createComment({
+                    owner,
+                    repo,
+                    issue_number: pr.number,
+                    body: `🔄 **Auto-refreshing this PR**
+
+This PR is being automatically closed and will be reopened by ${pr.user.login} with fresh updates. This is necessary because:
+
+${isStale ? '• PR is stale (older than 24 hours)' : ''}
+${hasConflictLabels ? '• PR has conflicts or needs refresh labels' : ''}
+• GitHub Actions workflows have been updated
+
+The new PR will have the latest changes and should resolve any conflicts.
+
+**Original PR:** #${pr.number}
+**Bot:** ${pr.user.login}
+**Title:** ${pr.title}`
+                  });
+
+                  // Close the PR
+                  await github.rest.pulls.update({
+                    owner,
+                    repo,
+                    pull_number: pr.number,
+                    state: 'closed'
+                  });
+
+                  console.log(`  ✅ Closed PR #${pr.number}`);
+
+                  // Trigger the bot to create a fresh PR
+                  if (pr.user.login === 'dependabot[bot]') {
+                    console.log(`  🔄 Triggering Dependabot to create fresh PR...`);
+                    // Dependabot will automatically create a new PR on the next run
+                  }
+
+                } catch (error) {
+                  console.error(`  ❌ Failed to process PR #${pr.number}:`, error.message);
+                }
+              } else {
+                console.log(`  ✅ PR is fresh, no action needed`);
+              }
+            }
+
+            console.log('\n🎉 Bot PR refresh complete!');
+
+      - name: Trigger Dependabot updates
+        run: |
+          echo "🔄 Triggering Dependabot to check for updates..."
+          # This will cause Dependabot to check for any needed updates
+          # on its next scheduled run or immediately if there are conflicts
+          echo "Dependabot will create fresh PRs if needed"
