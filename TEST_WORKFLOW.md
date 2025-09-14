@@ -1,4 +1,4 @@
-# Test Auto-merge Workflow
+# Test Auto-merge Workflow - V2
 
 This file is created to test the auto-merge workflow functionality.
 
