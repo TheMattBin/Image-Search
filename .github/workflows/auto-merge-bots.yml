@@ -1,8 +1,8 @@
 name: Auto-merge Bot PRs
 
 on:
-  pull_request_target:
-    types: [opened, synchronize, reopened]
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
 
 permissions:
@@ -30,6 +30,7 @@ jobs:
           PR_TITLE="${{ github.event.pull_request.title }}"
           BRANCH="${{ github.event.pull_request.head.ref }}"
           BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
+          PR_LABELS="${{ github.event.pull_request.labels.*.name }}"
 
           echo "🤖 PR Information:"
           echo "  • PR Number: $PR_NUMBER"
@@ -37,6 +38,7 @@ jobs:
           echo "  • Bot Login: $BOT_LOGIN"
           echo "  • User Type: $BOT_TYPE"
           echo "  • Branch: $BRANCH -> $BASE_BRANCH"
+          echo "  • Labels: $PR_LABELS"
 
           # Check if Dependabot PR
           if [[ "$BOT_LOGIN" == "dependabot[bot]" ]]; then
@@ -44,6 +46,14 @@ jobs:
             echo "dependabot=true" >> $GITHUB_OUTPUT
           else
             echo "is_dependabot=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Check if has auto-merge label
+          if [[ "$PR_LABELS" == *"auto-merge"* ]] || [[ "$PR_LABELS" == *"dependencies"* ]]; then
+            echo "has_auto_merge_label=true" >> $GITHUB_OUTPUT
+            echo "✅ Auto-merge label detected"
+          else
+            echo "has_auto_merge_label=false" >> $GITHUB_OUTPUT
           fi
 
           # Check if trusted bot
@@ -70,13 +80,18 @@ jobs:
         run: |
           BOT_LOGIN="${{ github.event.pull_request.user.login }}"
           PR_TITLE="${{ github.event.pull_request.title }}"
+          HAS_AUTO_MERGE_LABEL="${{ steps.debug-info.outputs.has_auto_merge_label }}"
 
           # Default to not auto-merge
           SHOULD_MERGE="false"
           REASON=""
 
+          # If PR has auto-merge label, auto-merge regardless of bot type
+          if [[ "$HAS_AUTO_MERGE_LABEL" == "true" ]]; then
+            SHOULD_MERGE="true"
+            REASON="Auto-merge label"
           # Dependabot-specific logic
-          if [[ "$BOT_LOGIN" == "dependabot[bot]" ]]; then
+          elif [[ "$BOT_LOGIN" == "dependabot[bot]" ]]; then
             UPDATE_TYPE="${{ steps.dependabot-metadata.outputs.update-type }}"
 
             # Auto-merge security updates immediately

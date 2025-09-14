@@ -1,0 +1,145 @@
+name: Auto-merge on Check Success
+
+on:
+  check_suite:
+    types: [completed]
+  workflow_run:
+    workflows: ['Security Scanning']
+    types:
+      - completed
+    branches: [main, master]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.event.check_suite.conclusion == 'success' || github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PRs for this commit
+        id: get-prs
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            let commitSha = '';
+
+            // Get commit SHA from check_suite or workflow_run
+            if (context.payload.check_suite) {
+              commitSha = context.payload.check_suite.head_sha;
+            } else if (context.payload.workflow_run) {
+              commitSha = context.payload.workflow_run.head_sha;
+            }
+
+            if (!commitSha) {
+              core.setFailed('Could not determine commit SHA');
+              return;
+            }
+
+            console.log(`🔍 Looking for PRs with head SHA: ${commitSha}`);
+
+            // Find PRs associated with this commit
+            const { data: prs } = await github.rest.pulls.list({
+              owner,
+              repo,
+              state: 'open',
+              head: commitSha,
+              sort: 'updated',
+              direction: 'desc'
+            });
+
+            if (prs.length === 0) {
+              console.log('❌ No open PRs found for this commit');
+              return;
+            }
+
+            console.log(`✅ Found ${prs.length} PR(s)`);
+
+            // Filter for bot PRs that should be auto-merged
+            const botPrs = prs.filter(pr => {
+              const isBot = pr.user.type === 'Bot';
+              const isTrustedBot = ['dependabot[bot]', 'renovate[bot]', 'github-actions[bot]', 'merge[bot]'].includes(pr.user.login);
+              const hasAutoMergeLabel = pr.labels.some(label => ['auto-merge', 'dependencies'].includes(label.name));
+
+              console.log(`PR #${pr.number}: ${pr.user.login} (bot: ${isBot}, trusted: ${isTrustedBot}, auto-merge label: ${hasAutoMergeLabel})`);
+
+              return isBot && (isTrustedBot || hasAutoMergeLabel);
+            });
+
+            if (botPrs.length === 0) {
+              console.log('❌ No bot PRs eligible for auto-merge');
+              return;
+            }
+
+            console.log(`🤖 Found ${botPrs.length} bot PR(s) eligible for auto-merge`);
+
+            // Output PR numbers for next steps
+            const prNumbers = botPrs.map(pr => pr.number);
+            core.setOutput('pr-numbers', prNumbers.join(','));
+            core.setOutput('has-prs', 'true');
+
+            // Store PR details in environment file for next steps
+            for (const pr of botPrs) {
+              core.exportVariable(`PR_${pr.number}_TITLE`, pr.title);
+              core.exportVariable(`PR_${pr.number}_USER`, pr.user.login);
+            }
+
+      - name: Auto-merge eligible PRs
+        if: steps.get-prs.outputs.has-prs == 'true'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumbers = "${{ steps.get-prs.outputs.pr-numbers }}".split(',').map(n => parseInt(n.trim()));
+
+            for (const prNumber of prNumbers) {
+              try {
+                console.log(`🔄 Processing PR #${prNumber}`);
+
+                // Approve the PR first
+                await github.rest.pulls.createReview({
+                  owner,
+                  repo,
+                  pull_number: prNumber,
+                  event: 'APPROVE'
+                });
+                console.log(`✅ Approved PR #${prNumber}`);
+
+                // Enable auto-merge
+                await github.rest.pulls.merge({
+                  owner,
+                  repo,
+                  pull_number: prNumber,
+                  merge_method: 'squash'
+                });
+                console.log(`✅ Auto-merge enabled for PR #${prNumber}`);
+
+                // Add comment
+                const prTitle = process.env[`PR_${prNumber}_TITLE`] || 'Unknown';
+                const botUser = process.env[`PR_${prNumber}_USER`] || 'Unknown bot';
+
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: prNumber,
+                  body: `🤖 This PR has been automatically approved and merged after all checks passed.
+
+**Title:** ${prTitle}
+**Bot:** ${botUser}
+**PR:** #${prNumber}`
+                });
+
+                console.log(`🎉 Successfully processed PR #${prNumber}`);
+
+              } catch (error) {
+                console.error(`❌ Failed to process PR #${prNumber}:`, error.message);
+              }
+            }
