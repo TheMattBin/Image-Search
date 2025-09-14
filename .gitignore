@@ -150,5 +150,3 @@ cython_debug/
 *.webp
 *.psd
 *.xcf
-
-.claude
