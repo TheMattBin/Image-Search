@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: read
 
 jobs:
   auto-merge:
@@ -20,23 +21,32 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check if PR is from trusted bot
-        id: check-bot
+      - name: Debug PR Information
+        id: debug-info
         run: |
           BOT_LOGIN="${{ github.event.pull_request.user.login }}"
           BOT_TYPE="${{ github.event.pull_request.user.type }}"
           PR_NUMBER="${{ github.event.pull_request.number }}"
           PR_TITLE="${{ github.event.pull_request.title }}"
-          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          BRANCH="${{ github.event.pull_request.head.ref }}"
+          BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
 
           echo "🤖 PR Information:"
           echo "  • PR Number: $PR_NUMBER"
           echo "  • PR Title: $PR_TITLE"
           echo "  • Bot Login: $BOT_LOGIN"
           echo "  • User Type: $BOT_TYPE"
-          echo "  • Head SHA: $HEAD_SHA"
+          echo "  • Branch: $BRANCH -> $BASE_BRANCH"
 
-          # List of trusted bots
+          # Check if Dependabot PR
+          if [[ "$BOT_LOGIN" == "dependabot[bot]" ]]; then
+            echo "is_dependabot=true" >> $GITHUB_OUTPUT
+            echo "dependabot=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_dependabot=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Check if trusted bot
           if [[ "$BOT_LOGIN" == "dependabot[bot]" ]] || \
              [[ "$BOT_LOGIN" == "renovate[bot]" ]] || \
              [[ "$BOT_LOGIN" == "github-actions[bot]" ]] || \
@@ -46,11 +56,55 @@ jobs:
           else
             echo "is_trusted=false" >> $GITHUB_OUTPUT
             echo "⚠️  Untrusted bot: $BOT_LOGIN"
-            echo "  • Available bot users: dependabot[bot], renovate[bot], github-actions[bot], merge[bot]"
           fi
 
+      - name: Get Dependabot metadata
+        id: dependabot-metadata
+        if: steps.debug-info.outputs.is_dependabot == 'true'
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Determine if auto-merge should proceed
+        id: auto-merge-decision
+        run: |
+          BOT_LOGIN="${{ github.event.pull_request.user.login }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+
+          # Default to not auto-merge
+          SHOULD_MERGE="false"
+          REASON=""
+
+          # Dependabot-specific logic
+          if [[ "$BOT_LOGIN" == "dependabot[bot]" ]]; then
+            UPDATE_TYPE="${{ steps.dependabot-metadata.outputs.update-type }}"
+
+            # Auto-merge security updates immediately
+            if [[ "$PR_TITLE" == *"security"* ]] || [[ "$PR_TITLE" == *"Security"* ]]; then
+              SHOULD_MERGE="true"
+              REASON="Security update"
+            # Auto-merge patch and minor updates
+            elif [[ "$UPDATE_TYPE" == "version-update:semver-patch" ]] || \
+                 [[ "$UPDATE_TYPE" == "version-update:semver-minor" ]]; then
+              SHOULD_MERGE="true"
+              REASON="$UPDATE_TYPE"
+            else
+              REASON="Major version update or other type"
+            fi
+          # Other trusted bots - auto-merge all
+          elif [[ "$BOT_LOGIN" == "renovate[bot]" ]] || \
+               [[ "$BOT_LOGIN" == "github-actions[bot]" ]] || \
+               [[ "$BOT_LOGIN" == "merge[bot]" ]]; then
+            SHOULD_MERGE="true"
+            REASON="Trusted bot"
+          fi
+
+          echo "should_merge=$SHOULD_MERGE" >> $GITHUB_OUTPUT
+          echo "reason=$REASON" >> $GITHUB_OUTPUT
+          echo "🔄 Auto-merge decision: $SHOULD_MERGE ($REASON)"
+
       - name: Wait for checks to complete
-        if: steps.check-bot.outputs.is_trusted == 'true'
+        if: steps.auto-merge-decision.outputs.should_merge == 'true'
         uses: actions/github-script@v6
         with:
           script: |
@@ -129,30 +183,37 @@ jobs:
             console.log('⏰ Timeout waiting for status checks');
             core.setFailed('Timeout waiting for status checks');
 
-      - name: Approve and auto-merge
-        if: steps.check-bot.outputs.is_trusted == 'true'
+      - name: Approve and enable auto-merge
+        if: steps.auto-merge-decision.outputs.should_merge == 'true'
+        uses: peter-evans/enable-pull-request-automerge@v4
+        with:
+          pull-request-number: ${{ github.event.pull_request.number }}
+          merge-method: squash
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Approve PR (fallback)
+        if: steps.auto-merge-decision.outputs.should_merge == 'true' && failure()
         run: |
-          PR_URL="${{ github.event.pull_request.html_url }}"
-
-          # Approve the PR
-          gh pr review --approve "$PR_URL"
-          echo "✅ PR approved"
-
-          # Enable auto-merge
-          gh pr merge --auto --squash "$PR_URL"
-          echo "✅ Auto-merge enabled"
+          gh pr review --approve "${{ github.event.pull_request.html_url }}"
+          echo "✅ PR approved (fallback)"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Comment on auto-merge
-        if: steps.check-bot.outputs.is_trusted == 'true'
+        if: steps.auto-merge-decision.outputs.should_merge == 'true'
         uses: actions/github-script@v6
         with:
           script: |
             const { owner, repo, number: pull_number } = context.issue;
+            const reason = '${{ steps.auto-merge-decision.outputs.reason }}';
+
             await github.rest.issues.createComment({
               owner,
               repo,
               issue_number: pull_number,
-              body: '🤖 This PR from a trusted bot has been automatically approved and merged.'
+              body: `🤖 This PR has been automatically approved and enabled for auto-merge.
+
+**Reason:** ${reason}
+**Bot:** ${{ github.event.pull_request.user.login }}
+**PR:** #${{ github.event.pull_request.number }}`
             });
