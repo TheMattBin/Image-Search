@@ -69,17 +69,17 @@ jobs:
                     issue_number: pr.number,
                     body: `🔄 **Auto-refreshing this PR**
 
-This PR is being automatically closed and will be reopened by ${pr.user.login} with fresh updates. This is necessary because:
+                    This PR is being automatically closed and will be reopened by ${pr.user.login} with fresh updates. This is necessary because:
 
-${isStale ? '• PR is stale (older than 24 hours)' : ''}
-${hasConflictLabels ? '• PR has conflicts or needs refresh labels' : ''}
-• GitHub Actions workflows have been updated
+                    ${isStale ? '• PR is stale (older than 24 hours)' : ''}
+                    ${hasConflictLabels ? '• PR has conflicts or needs refresh labels' : ''}
+                    • GitHub Actions workflows have been updated
 
-The new PR will have the latest changes and should resolve any conflicts.
+                    The new PR will have the latest changes and should resolve any conflicts.
 
-**Original PR:** #${pr.number}
-**Bot:** ${pr.user.login}
-**Title:** ${pr.title}`
+                    **Original PR:** #${pr.number}
+                    **Bot:** ${pr.user.login}
+                    **Title:** ${pr.title}`
                   });
 
                   // Close the PR
@@ -98,13 +98,13 @@ The new PR will have the latest changes and should resolve any conflicts.
                     // Dependabot will automatically create a new PR on the next run
                   }
 
-                } catch (error) {
-                  console.error(`  ❌ Failed to process PR #${pr.number}:`, error.message);
+                    } catch (error) {
+                      console.error(`  ❌ Failed to process PR #${pr.number}:`, error.message);
+                    }
+                  } else {
+                    console.log(`  ✅ PR is fresh, no action needed`);
+                  }
                 }
-              } else {
-                console.log(`  ✅ PR is fresh, no action needed`);
-              }
-            }
 
             console.log('\n🎉 Bot PR refresh complete!');
 

@@ -133,19 +133,19 @@ jobs:
                 issue_number: pull_number,
                 body: `⚠️ **Merge Conflict Detected**
 
-This PR from ${{ github.event.pull_request.user.login }} has merge conflicts and cannot be merged automatically.
+                This PR from ${{ github.event.pull_request.user.login }} has merge conflicts and cannot be merged automatically.
 
-**PR:** #${pull_number}
-**Title:** "${{ steps.check-conflicts.outputs.pr-title }}"
+                **PR:** #${pull_number}
+                **Title:** "${{ steps.check-conflicts.outputs.pr-title }}"
 
-🔄 **Next Steps:**
-1. Please resolve the merge conflicts locally
-2. Push the resolved changes to the PR branch
-3. The PR will then be automatically merged if eligible
+                🔄 **Next Steps:**
+                1. Please resolve the merge conflicts locally
+                2. Push the resolved changes to the PR branch
+                3. The PR will then be automatically merged if eligible
 
-Alternatively, you can close this PR and the bot will create a fresh one.`
+                Alternatively, you can close this PR and the bot will create a fresh one.`
               });
 
-            } catch (error) {
-              console.error(`❌ Failed to comment on conflicting PR: ${error.message}`);
-            }
+              } catch (error) {
+                console.error(`❌ Failed to comment on conflicting PR: ${error.message}`);
+              }
