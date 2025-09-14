@@ -1,0 +1,111 @@
+name: Auto-merge Bot PRs
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.type == 'Bot'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if PR is from trusted bot
+        id: check-bot
+        run: |
+          BOT_LOGIN="${{ github.event.pull_request.user.login }}"
+          echo "Bot login: $BOT_LOGIN"
+
+          # List of trusted bots
+          if [[ "$BOT_LOGIN" == "dependabot[bot]" ]] || \
+             [[ "$BOT_LOGIN" == "renovate[bot]" ]] || \
+             [[ "$BOT_LOGIN" == "github-actions[bot]" ]] || \
+             [[ "$BOT_LOGIN" == "merge[bot]" ]]; then
+            echo "is_trusted=true" >> $GITHUB_OUTPUT
+            echo "✅ Trusted bot detected: $BOT_LOGIN"
+          else
+            echo "is_trusted=false" >> $GITHUB_OUTPUT
+            echo "⚠️  Untrusted bot: $BOT_LOGIN"
+          fi
+
+      - name: Wait for checks to complete
+        if: steps.check-bot.outputs.is_trusted == 'true'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { owner, repo, number: pull_number } = context.issue;
+            const maxWaitTime = 30 * 60 * 1000; // 30 minutes
+            const checkInterval = 30000; // 30 seconds
+
+            const startTime = Date.now();
+
+            while (Date.now() - startTime < maxWaitTime) {
+              const { data: checks } = await github.rest.checks.listForRef({
+                owner,
+                repo,
+                ref: context.payload.pull_request.head.sha,
+              });
+
+              const allCompleted = checks.check_runs.every(check =>
+                check.status === 'completed'
+              );
+
+              const allSuccessful = checks.check_runs.every(check =>
+                check.conclusion === 'success' || check.conclusion === 'neutral'
+              );
+
+              if (allCompleted) {
+                if (allSuccessful) {
+                  console.log('✅ All checks passed');
+                  return;
+                } else {
+                  console.log('❌ Some checks failed');
+                  core.setFailed('Some checks failed');
+                  return;
+                }
+              }
+
+              console.log('⏳ Waiting for checks to complete...');
+              await new Promise(resolve => setTimeout(resolve, checkInterval));
+            }
+
+            console.log('⏰ Timeout waiting for checks');
+            core.setFailed('Timeout waiting for checks to complete');
+
+      - name: Approve and auto-merge
+        if: steps.check-bot.outputs.is_trusted == 'true'
+        run: |
+          PR_URL="${{ github.event.pull_request.html_url }}"
+
+          # Approve the PR
+          gh pr review --approve "$PR_URL"
+          echo "✅ PR approved"
+
+          # Enable auto-merge
+          gh pr merge --auto --squash "$PR_URL"
+          echo "✅ Auto-merge enabled"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on auto-merge
+        if: steps.check-bot.outputs.is_trusted == 'true'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { owner, repo, number: pull_number } = context.issue;
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: pull_number,
+              body: '🤖 This PR from a trusted bot has been automatically approved and merged.'
+            });
