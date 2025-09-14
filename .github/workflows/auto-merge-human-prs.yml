@@ -39,10 +39,25 @@ jobs:
 
                 console.log(`📊 Status check: ${combinedStatus.state}`);
 
-                if (combinedStatus.state === 'success') {
-                  console.log('✅ All checks passed!');
+                // Get detailed status checks to filter out skipped workflows
+                const { data: statuses } = await github.rest.repos.listCommitStatusesForRef({
+                  owner,
+                  repo,
+                  ref: context.payload.pull_request.head.sha,
+                });
+
+                // Filter out skipped workflows and check if remaining are successful
+                const relevantStatuses = statuses.filter(status => status.state !== 'skipped');
+                const hasFailures = relevantStatuses.some(status => status.state === 'failure');
+                const allCompleted = relevantStatuses.every(status => status.state !== 'pending');
+
+                console.log(`📊 Relevant status checks: ${relevantStatuses.length} (filtered out ${statuses.length - relevantStatuses.length} skipped)`);
+                console.log(`📊 All completed: ${allCompleted}, Has failures: ${hasFailures}`);
+
+                if (allCompleted && !hasFailures) {
+                  console.log('✅ All relevant checks passed!');
                   return;
-                } else if (combinedStatus.state === 'failure') {
+                } else if (hasFailures) {
                   console.log('❌ Some checks failed');
                   core.setFailed('Status checks failed');
                   return;
