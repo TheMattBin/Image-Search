@@ -144,10 +144,7 @@ jobs:
 
           echo "🔄 Auto-merging PR #$PR_NUMBER"
 
-          # Approve the PR
-          gh pr review --approve "$PR_URL"
-
-          # Enable auto-merge with squash
+          # Enable auto-merge with squash (without approval)
           gh pr merge --auto --squash "$PR_URL"
 
           echo "✅ Auto-merge enabled for PR #$PR_NUMBER"
@@ -166,7 +163,7 @@ jobs:
               owner,
               repo,
               issue_number: pull_number,
-              body: `🤖 **Auto-merge Enabled**\n\nThis PR has been automatically approved and enabled for auto-merge since all checks passed and requirements are met.\n\n**PR:** #${pull_number}\n**Author:** @${prAuthor}\n**Status:** All checks passed ✅\n**Merge Method:** Squash\n\nThe PR will be automatically merged once any branch protection rules are satisfied.`
+              body: `🤖 **Auto-merge Enabled**\n\nThis PR has been automatically enabled for auto-merge since all checks passed and requirements are met.\n\n**PR:** #${pull_number}\n**Author:** @${prAuthor}\n**Status:** All checks passed ✅\n**Merge Method:** Squash\n\nThe PR will be automatically merged once any branch protection rules are satisfied.`
             });
 
       - name: Comment on requirements not met

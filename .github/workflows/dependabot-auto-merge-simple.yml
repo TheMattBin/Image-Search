@@ -72,9 +72,6 @@ jobs:
 
           echo "🔄 Auto-merging Dependabot PR: $UPDATE_TYPE"
 
-          # Approve the PR
-          gh pr review --approve "$PR_URL"
-
           # Enable auto-merge
           gh pr merge --auto --squash "$PR_URL"
 
@@ -95,7 +92,7 @@ jobs:
               repo,
               issue_number: pull_number,
               body: |-
-              🤖 This Dependabot PR has been automatically approved and enabled for auto-merge.
+              🤖 This Dependabot PR has been automatically enabled for auto-merge.
 
               **Update Type:** ${updateType}
               **PR:** #${pull_number}
