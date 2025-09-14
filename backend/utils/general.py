@@ -4,6 +4,17 @@ import requests
 from PIL import Image
 import re
 
+# --- Add Fernet encryption dependencies ---
+from cryptography.fernet import Fernet
+import os
+
+# Fetch encryption key from environment variable, or generate/save one as needed
+FERNET_KEY = os.environ.get('DOWNLOAD_ENC_KEY')
+if FERNET_KEY is None:
+    # Generate a new key (for demo purposes; in production, persist it securely!)
+    FERNET_KEY = Fernet.generate_key()
+    print("Generated new Fernet key. Store this securely for future decryption.")
+fernet = Fernet(FERNET_KEY)
 def download_uri(uri, dir="./"):
     """Downloads file from URI, performing checks and renaming; supports timeout and image format suffix addition."""
     # Download
@@ -16,8 +27,11 @@ def download_uri(uri, dir="./"):
     if match:
         fname = f"{match.group('id')}_b.jpg"
     f = dir / fname  # sanitized filename
+    # --- Download and encrypt image content before saving ---
+    image_bytes = requests.get(uri, timeout=10).content
+    encrypted_bytes = fernet.encrypt(image_bytes)
     with open(f, "wb") as file:
-        file.write(requests.get(uri, timeout=10).content)
+        file.write(encrypted_bytes)
 
     # Rename (remove wildcard characters)
     src = f  # original name
