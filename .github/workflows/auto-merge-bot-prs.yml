@@ -24,7 +24,17 @@ jobs:
         id: check-bot
         run: |
           BOT_LOGIN="${{ github.event.pull_request.user.login }}"
-          echo "Bot login: $BOT_LOGIN"
+          BOT_TYPE="${{ github.event.pull_request.user.type }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          echo "🤖 PR Information:"
+          echo "  • PR Number: $PR_NUMBER"
+          echo "  • PR Title: $PR_TITLE"
+          echo "  • Bot Login: $BOT_LOGIN"
+          echo "  • User Type: $BOT_TYPE"
+          echo "  • Head SHA: $HEAD_SHA"
 
           # List of trusted bots
           if [[ "$BOT_LOGIN" == "dependabot[bot]" ]] || \
@@ -36,6 +46,7 @@ jobs:
           else
             echo "is_trusted=false" >> $GITHUB_OUTPUT
             echo "⚠️  Untrusted bot: $BOT_LOGIN"
+            echo "  • Available bot users: dependabot[bot], renovate[bot], github-actions[bot], merge[bot]"
           fi
 
       - name: Wait for checks to complete
@@ -44,43 +55,79 @@ jobs:
         with:
           script: |
             const { owner, repo, number: pull_number } = context.issue;
-            const maxWaitTime = 30 * 60 * 1000; // 30 minutes
-            const checkInterval = 30000; // 30 seconds
+            const maxWaitTime = 10 * 60 * 1000; // 10 minutes
+            const checkInterval = 15000; // 15 seconds
+            const maxAttempts = maxWaitTime / checkInterval;
+            let attempts = 0;
 
-            const startTime = Date.now();
+            console.log(`🔍 Waiting for checks on PR #${pull_number}...`);
 
-            while (Date.now() - startTime < maxWaitTime) {
-              const { data: checks } = await github.rest.checks.listForRef({
-                owner,
-                repo,
-                ref: context.payload.pull_request.head.sha,
-              });
+            while (attempts < maxAttempts) {
+              attempts++;
 
-              const allCompleted = checks.check_runs.every(check =>
-                check.status === 'completed'
-              );
+              try {
+                // Get combined status for the PR
+                const { data: combinedStatus } = await github.rest.repos.getCombinedStatusForRef({
+                  owner,
+                  repo,
+                  ref: context.payload.pull_request.head.sha,
+                });
 
-              const allSuccessful = checks.check_runs.every(check =>
-                check.conclusion === 'success' || check.conclusion === 'neutral'
-              );
+                console.log(`📊 Status check: ${combinedStatus.state}`);
+                console.log(`📋 Total statuses: ${combinedStatus.statuses.length}`);
 
-              if (allCompleted) {
-                if (allSuccessful) {
-                  console.log('✅ All checks passed');
+                // Log individual status checks
+                combinedStatus.statuses.forEach(status => {
+                  console.log(`  • ${status.context}: ${status.state}`);
+                });
+
+                if (combinedStatus.state === 'success') {
+                  console.log('✅ All status checks passed!');
                   return;
-                } else {
-                  console.log('❌ Some checks failed');
-                  core.setFailed('Some checks failed');
+                } else if (combinedStatus.state === 'failure') {
+                  console.log('❌ Some status checks failed');
+                  core.setFailed('Status checks failed');
                   return;
                 }
+
+                // Also check for GitHub Actions (checks) specifically
+                const { data: checks } = await github.rest.checks.listForRef({
+                  owner,
+                  repo,
+                  ref: context.payload.pull_request.head.sha,
+                });
+
+                const allChecksCompleted = checks.check_runs.every(check =>
+                  check.status === 'completed'
+                );
+
+                const allChecksSuccessful = checks.check_runs.every(check =>
+                  check.conclusion === 'success' || check.conclusion === 'neutral'
+                );
+
+                console.log(`🔍 GitHub Actions checks: ${checks.check_runs.length} total`);
+
+                if (allChecksCompleted) {
+                  if (allChecksSuccessful) {
+                    console.log('✅ All GitHub Actions checks passed!');
+                    return;
+                  } else {
+                    console.log('❌ Some GitHub Actions checks failed');
+                    core.setFailed('GitHub Actions checks failed');
+                    return;
+                  }
+                }
+
+              } catch (error) {
+                console.log(`⚠️  Error checking status: ${error.message}`);
               }
 
-              console.log('⏳ Waiting for checks to complete...');
+              console.log(`⏳ Waiting... (attempt ${attempts}/${maxAttempts})`);
               await new Promise(resolve => setTimeout(resolve, checkInterval));
             }
 
-            console.log('⏰ Timeout waiting for checks');
-            core.setFailed('Timeout waiting for checks to complete');
+            console.log('⏰ Timeout waiting for status checks');
+            core.setFailed('Timeout waiting for status checks');
 
       - name: Approve and auto-merge
         if: steps.check-bot.outputs.is_trusted == 'true'
