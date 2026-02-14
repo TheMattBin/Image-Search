@@ -1,5 +1,5 @@
 transformers
-cryptography==46.0.4
+cryptography==46.0.5
 pillow
 Flask
 weaviate-client
