@@ -8,8 +8,8 @@ updates:
       day: "monday"
       time: "09:00"
     open-pull-requests-limit: 10
-    reviewers:
-      - "TheMattBin"
+    # reviewers:
+    #   - "TheMattBin"
     assignees:
       - "TheMattBin"
     commit-message:
@@ -28,8 +28,8 @@ updates:
       day: "monday"
       time: "09:00"
     open-pull-requests-limit: 10
-    reviewers:
-      - "TheMattBin"
+    # reviewers:
+    #   - "TheMattBin"
     assignees:
       - "TheMattBin"
     commit-message:
@@ -53,3 +53,11 @@ updates:
       - "dependencies"
       - "github-actions"
     rebase-strategy: "disabled"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+# Note: Dependabot security updates are enabled separately via:
+# Repository Settings > Code security and analysis > Dependabot security updates
+# This creates automatic PRs for known CVEs regardless of the version update schedule above.

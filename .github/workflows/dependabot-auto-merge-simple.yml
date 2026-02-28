@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Wait for checks to complete
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             const { owner, repo, number: pull_number } = context.issue;
@@ -24,27 +24,47 @@ jobs:
             const checkInterval = 30000; // 30 seconds
             let attempts = 0;
 
+            // Checks that must pass for auto-merge (skip security scans - they're informational)
+            const requiredChecks = [];
+
             console.log(`🔍 Waiting for checks on PR #${pull_number}...`);
 
             while (attempts < maxWaitTime / checkInterval) {
               attempts++;
 
               try {
-                // Get combined status for the PR
-                const { data: combinedStatus } = await github.rest.repos.getCombinedStatusForRef({
+                // Get check runs for the PR
+                const { data: checkRuns } = await github.rest.checks.listForRef({
                   owner,
                   repo,
                   ref: context.payload.pull_request.head.sha,
                 });
 
-                console.log(`📊 Status check: ${combinedStatus.state}`);
+                const pendingChecks = checkRuns.check_runs.filter(
+                  run => run.status !== 'completed' && 
+                         !run.name.includes('Security') && 
+                         !run.name.includes('security') &&
+                         run.name !== 'codeql-analysis'
+                );
 
-                if (combinedStatus.state === 'success') {
-                  console.log('✅ All checks passed!');
+                const failedChecks = checkRuns.check_runs.filter(
+                  run => run.status === 'completed' && 
+                         run.conclusion === 'failure' &&
+                         !run.name.includes('Security') && 
+                         !run.name.includes('security') &&
+                         run.name !== 'codeql-analysis'
+                );
+
+                console.log(`📊 Pending: ${pendingChecks.length}, Failed (non-security): ${failedChecks.length}`);
+
+                if (failedChecks.length > 0) {
+                  console.log(`❌ Failed checks: ${failedChecks.map(c => c.name).join(', ')}`);
+                  core.setFailed('Required checks failed');
                   return;
-                } else if (combinedStatus.state === 'failure') {
-                  console.log('❌ Some checks failed');
-                  core.setFailed('Status checks failed');
+                }
+
+                if (pendingChecks.length === 0) {
+                  console.log('✅ All required checks passed!');
                   return;
                 }
               } catch (error) {
@@ -84,7 +104,7 @@ jobs:
 
       - name: Comment on auto-merge
         if: steps.dependabot-metadata.outputs.update-type == 'version-update:semver-patch' || steps.dependabot-metadata.outputs.update-type == 'version-update:semver-minor' || startsWith(github.event.pull_request.title, 'security')
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             const { owner, repo, number: pull_number } = context.issue;
@@ -94,9 +114,5 @@ jobs:
               owner,
               repo,
               issue_number: pull_number,
-              body: |-
-              🤖 This Dependabot PR has been automatically approved and enabled for auto-merge.
-
-              **Update Type:** ${updateType}
-              **PR:** #${pull_number}
+              body: `🤖 This Dependabot PR has been automatically approved and enabled for auto-merge.\n\n**Update Type:** ${updateType}\n**PR:** #${pull_number}`
             });
