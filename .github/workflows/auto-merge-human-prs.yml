@@ -22,6 +22,7 @@ jobs:
             const { owner, repo, number: pull_number } = context.issue;
             const maxWaitTime = 15 * 60 * 1000; // 15 minutes
             const checkInterval = 30000; // 30 seconds
+            const initialDelay = 60000; // Wait 60 seconds for checks to register
             let attempts = 0;
 
             // Check names to exclude (case-insensitive substring match)
@@ -41,6 +42,10 @@ jobs:
             };
 
             console.log(`🔍 Waiting for checks on PR #${pull_number}...`);
+            
+            // Initial delay to let other workflows register
+            console.log(`⏳ Initial wait (${initialDelay/1000}s) for checks to register...`);
+            await new Promise(resolve => setTimeout(resolve, initialDelay));
 
             while (attempts < maxWaitTime / checkInterval) {
               attempts++;

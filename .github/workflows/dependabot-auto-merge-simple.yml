@@ -22,6 +22,7 @@ jobs:
             const { owner, repo, number: pull_number } = context.issue;
             const maxWaitTime = 10 * 60 * 1000; // 10 minutes
             const checkInterval = 30000; // 30 seconds
+            const initialDelay = 60000; // Wait 60 seconds for checks to register
             let attempts = 0;
 
             // Check names to exclude (case-insensitive substring match)
@@ -41,6 +42,10 @@ jobs:
             };
 
             console.log(`🔍 Waiting for checks on PR #${pull_number}...`);
+            
+            // Initial delay to let other workflows register
+            console.log(`⏳ Initial wait (${initialDelay/1000}s) for checks to register...`);
+            await new Promise(resolve => setTimeout(resolve, initialDelay));
 
             while (attempts < maxWaitTime / checkInterval) {
               attempts++;
@@ -100,8 +105,14 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
+      - name: Log update type
+        run: |
+          echo "📦 Update type: ${{ steps.dependabot-metadata.outputs.update-type }}"
+          echo "📦 Dependency names: ${{ steps.dependabot-metadata.outputs.dependency-names }}"
+          echo "📦 Package ecosystem: ${{ steps.dependabot-metadata.outputs.package-ecosystem }}"
+
       - name: Auto-merge if safe
-        if: steps.dependabot-metadata.outputs.update-type == 'version-update:semver-patch' || steps.dependabot-metadata.outputs.update-type == 'version-update:semver-minor' || startsWith(github.event.pull_request.title, 'security')
+        if: steps.dependabot-metadata.outputs.update-type == 'version-update:semver-patch' || steps.dependabot-metadata.outputs.update-type == 'version-update:semver-minor' || steps.dependabot-metadata.outputs.update-type == 'version-update:semver-major' || contains(github.event.pull_request.title, 'security')
         run: |
           PR_URL="${{ github.event.pull_request.html_url }}"
           UPDATE_TYPE="${{ steps.dependabot-metadata.outputs.update-type }}"
@@ -111,15 +122,18 @@ jobs:
           # Approve the PR
           gh pr review --approve "$PR_URL"
 
-          # Enable auto-merge
-          gh pr merge --auto --squash "$PR_URL"
+          # Merge directly (not --auto) since checks already passed
+          gh pr merge --squash "$PR_URL" --delete-branch || echo "⚠️ Direct merge failed, trying auto-merge"
+          
+          # Fallback to auto-merge if direct merge fails (e.g., branch protection)
+          gh pr merge --auto --squash "$PR_URL" 2>/dev/null || true
 
-          echo "✅ Auto-merge enabled for PR"
+          echo "✅ Merge initiated for PR"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Comment on auto-merge
-        if: steps.dependabot-metadata.outputs.update-type == 'version-update:semver-patch' || steps.dependabot-metadata.outputs.update-type == 'version-update:semver-minor' || startsWith(github.event.pull_request.title, 'security')
+        if: steps.dependabot-metadata.outputs.update-type == 'version-update:semver-patch' || steps.dependabot-metadata.outputs.update-type == 'version-update:semver-minor' || steps.dependabot-metadata.outputs.update-type == 'version-update:semver-major' || contains(github.event.pull_request.title, 'security')
         uses: actions/github-script@v8
         with:
           script: |
