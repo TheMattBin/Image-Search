@@ -24,7 +24,7 @@ jobs:
 
       - name: Check for merge conflicts
         id: check-conflicts
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             const { owner, repo, number: pull_number } = context.issue;
@@ -54,7 +54,7 @@ jobs:
 
       - name: Handle conflicting bot PR
         if: steps.check-conflicts.outputs.has-conflicts == 'true' && startsWith(github.event.pull_request.user.login, 'dependabot')
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             const { owner, repo, number: pull_number } = context.issue;
@@ -110,7 +110,7 @@ jobs:
 
       - name: Schedule refresh for other bot PRs
         if: steps.check-conflicts.outputs.has-conflicts == 'true' && !startsWith(github.event.pull_request.user.login, 'dependabot')
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             const { owner, repo, number: pull_number } = context.issue;

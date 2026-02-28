@@ -24,8 +24,18 @@ jobs:
             const checkInterval = 30000; // 30 seconds
             let attempts = 0;
 
-            // Checks that must pass for auto-merge (skip security scans - they're informational)
-            const requiredChecks = [];
+            // Patterns to exclude from required checks (case-insensitive)
+            const excludePatterns = [
+              /security/i,
+              /codeql/i,
+              /auto-merge/i,
+              /dependabot/i,
+              /conflicting/i,
+              /refresh.*bot/i,
+              /code scanning/i
+            ];
+
+            const shouldExclude = (name) => excludePatterns.some(pattern => pattern.test(name));
 
             console.log(`🔍 Waiting for checks on PR #${pull_number}...`);
 
@@ -40,22 +50,25 @@ jobs:
                   ref: context.payload.pull_request.head.sha,
                 });
 
+                // Log all checks for debugging on first attempt
+                if (attempts === 1) {
+                  console.log('📋 All checks:', checkRuns.check_runs.map(c => `${c.name} (${c.status})`).join(', '));
+                }
+
                 const pendingChecks = checkRuns.check_runs.filter(
-                  run => run.status !== 'completed' && 
-                         !run.name.includes('Security') && 
-                         !run.name.includes('security') &&
-                         run.name !== 'codeql-analysis'
+                  run => run.status !== 'completed' && !shouldExclude(run.name)
                 );
 
                 const failedChecks = checkRuns.check_runs.filter(
                   run => run.status === 'completed' && 
                          run.conclusion === 'failure' &&
-                         !run.name.includes('Security') && 
-                         !run.name.includes('security') &&
-                         run.name !== 'codeql-analysis'
+                         !shouldExclude(run.name)
                 );
 
                 console.log(`📊 Pending: ${pendingChecks.length}, Failed (non-security): ${failedChecks.length}`);
+                if (pendingChecks.length > 0) {
+                  console.log(`⏳ Waiting for: ${pendingChecks.map(c => c.name).join(', ')}`);
+                }
 
                 if (failedChecks.length > 0) {
                   console.log(`❌ Failed checks: ${failedChecks.map(c => c.name).join(', ')}`);
