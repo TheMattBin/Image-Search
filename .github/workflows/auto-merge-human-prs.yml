@@ -24,18 +24,21 @@ jobs:
             const checkInterval = 30000; // 30 seconds
             let attempts = 0;
 
-            // Patterns to exclude from required checks (case-insensitive)
-            const excludePatterns = [
-              /security/i,
-              /codeql/i,
-              /auto-merge/i,
-              /dependabot/i,
-              /conflicting/i,
-              /refresh.*bot/i,
-              /code scanning/i
+            // Check names to exclude (case-insensitive substring match)
+            const excludeKeywords = [
+              'security',
+              'codeql',
+              'auto-merge',
+              'dependabot',
+              'conflicting',
+              'refresh',
+              'code scanning'
             ];
 
-            const shouldExclude = (name) => excludePatterns.some(pattern => pattern.test(name));
+            const shouldExclude = (name) => {
+              const lowerName = name.toLowerCase();
+              return excludeKeywords.some(keyword => lowerName.includes(keyword));
+            };
 
             console.log(`🔍 Waiting for checks on PR #${pull_number}...`);
 
@@ -52,7 +55,7 @@ jobs:
 
                 // Log all checks for debugging on first attempt
                 if (attempts === 1) {
-                  console.log('📋 All checks:', checkRuns.check_runs.map(c => `${c.name} (${c.status})`).join(', '));
+                  console.log('📋 All checks:', checkRuns.check_runs.map(c => `${c.name} (${c.status}, excluded: ${shouldExclude(c.name)})`).join(', '));
                 }
 
                 const pendingChecks = checkRuns.check_runs.filter(
