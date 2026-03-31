@@ -1,0 +1,47 @@
+name: Z.AI Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  zai-review:
+    name: Z.AI Code Review
+    runs-on: ubuntu-latest
+    # Don't run if already reviewed
+    if: |
+      && !contains(github.event.pull_request.labels.*.name, 'zai-reviewed')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Z.AI Code Review
+        uses: tarmojussila/zai-code-review@v0.3.0
+        with:
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+          ZAI_MODEL: glm-4-flash
+          ZAI_REVIEWER_NAME: Z.AI Code Reviewer
+          ZAI_SYSTEM_PROMPT: |
+            You are reviewing a GitHub pull request for a Visual Search Engine project.
+            The project has:
+            - Backend: FastAPI (Python) with AI models (SmolVLM2, CLIP) and Weaviate vector database
+            - Frontend: React 19 + TypeScript with Vite
+
+            Please review the provided code changes and provide feedback focusing on:
+            1. **Security vulnerabilities** - Look for injection attacks, authentication issues, XSS, file handling issues, etc.
+            2. **Code quality** - Unused code, complex logic, poor error handling, missing validation
+            3. **Performance issues** - Inefficient algorithms, unnecessary computations, memory leaks
+            4. **Potential bugs** - Edge cases, null handling, race conditions, validation errors
+
+            Provide your review in markdown format with:
+            - 🔴 **Critical Issues** (must fix before merge)
+            - 🟡 **Suggestions** (recommended improvements)
+            - 🟢 **Good Practices** (what's done well)
+
+            Be specific with file paths and line numbers. Keep it concise and actionable.
