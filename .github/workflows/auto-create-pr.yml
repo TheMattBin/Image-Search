@@ -1,0 +1,124 @@
+name: Auto Create PR
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+      - 'feat/**'
+      - 'fix/**'
+
+permissions:
+  pull-requests: write
+  contents: write
+
+jobs:
+  auto-create-pr:
+    name: Auto-create Pull Request
+    runs-on: ubuntu-latest
+    # Only run for the repository owner to prevent abuse
+    if: github.event.pusher.name == 'TheMattBin' || github.repository_owner == github.event.pusher.login
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Check for existing PR
+        id: check-pr
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          PR_COUNT=$(gh pr list --head "$BRANCH" --state open --json id --jq 'length' || echo "0")
+          echo "pr_count=$PR_COUNT" >> $GITHUB_OUTPUT
+          echo "Found $PR_COUNT existing PR(s) for branch $BRANCH"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate PR title and body
+        id: generate-pr-content
+        if: steps.check-pr.outputs.pr_count == 0
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          BASE_BRANCH="${{ github.base_ref || 'main' }}"
+
+          # Get commit messages since branching from main
+          COMMITS=$(git log main..HEAD --pretty=format:"%s" --reverse | tr '\n' '|' | sed 's/|$//')
+
+          # Generate PR title from branch name and first commit
+          if [ -n "$COMMITS" ]; then
+            FIRST_COMMIT=$(echo "$COMMITS" | cut -d'|' -f1)
+            PR_TITLE="[Auto] $BRANCH: $FIRST_COMMIT"
+          else
+            PR_TITLE="[Auto] $BRANCH"
+          fi
+
+          # Generate PR body from commits
+          PR_BODY="## 🤖 Auto-generated Pull Request
+
+          This PR was automatically created when changes were pushed to branch \`$BRANCH\`.
+
+          ### 📝 Changes
+          "
+
+          # Add commit messages to body
+          IFS='|'
+          for commit in $COMMITS; do
+            PR_BODY="$PR_BODY
+          - $commit"
+          done
+
+          PR_BODY="$PR_BODY
+
+          ### 🔍 Review Checklist
+          - [ ] Tests pass locally and in CI
+          - [ ] Code follows project style guidelines
+          - [ ] Documentation updated (if needed)
+          - [ ] No sensitive data included
+
+          ---
+          *This PR was auto-created by GitHub Actions. Please review changes before merging.*"
+
+          # Save to file (escaped for multiline)
+          echo "pr_title<<EOF" >> $GITHUB_OUTPUT
+          echo "$PR_TITLE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "pr_body<<EOF" >> $GITHUB_OUTPUT
+          echo "$PR_BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Pull Request
+        if: steps.check-pr.outputs.pr_count == 0
+        run: |
+          gh pr create \
+            --base main \
+            --title "${{ steps.generate-pr-content.outputs.pr_title }}" \
+            --body "${{ steps.generate-pr-content.outputs.pr_body }}" \
+            --label "auto-created" \
+            --label "needs-review"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add comment to PR
+        if: steps.check-pr.outputs.pr_count == 0
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          gh pr comment \
+            --body "✅ **PR Auto-Created**
+
+          This pull request was automatically created when you pushed to \`$BRANCH\`.
+
+            **Next Steps:**
+            1. Review the changes
+            2. Add any additional labels if needed
+            3. Wait for CI checks to pass
+            4. Request review from team members
+
+            **Note:** This PR is labeled \`auto-created\` and \`needs-review\`."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

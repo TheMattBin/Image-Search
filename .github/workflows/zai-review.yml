@@ -1,0 +1,158 @@
+name: Z.AI GLM Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  glm-review:
+    name: Z.AI GLM Code Review
+    runs-on: ubuntu-latest
+    # Don't run if already reviewed
+    if: |
+      && !contains(github.event.pull_request.labels.*.name, 'glm-reviewed')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get diff
+        id: diff
+        run: |
+          # Get the diff between main and the PR branch
+          git fetch origin main:main
+          DIFF=$(git diff main...HEAD --diff-filter=M -- '*.py' '*.tsx' '*.ts' '*.js' '*.jsx' || echo "No changes")
+
+          # Limit diff size to avoid token limits
+          DIFF_LINES=$(echo "$DIFF" | wc -l)
+          MAX_LINES=2000
+
+          if [ $DIFF_LINES -gt $MAX_LINES ]; then
+            echo "Diff too large ($DIFF_LINES lines), truncating to $MAX_LINES lines"
+            DIFF=$(echo "$DIFF" | head -n $MAX_LINES)
+            echo "(... diff truncated, was $DIFF_LINES lines total)"
+          fi
+
+          # Save diff to file
+          echo "$DIFF" > /tmp/pr_diff.txt
+
+          echo "diff_size=$DIFF_LINES" >> $GITHUB_OUTPUT
+
+      - name: Review with Z.AI GLM
+        id: review
+        run: |
+          # Check if diff is empty
+          if [ ! -s /tmp/pr_diff.txt ]; then
+            echo "No relevant code changes to review"
+            echo "review_completed=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          DIFF=$(cat /tmp/pr_diff.txt)
+
+          # Prepare the prompt for GLM
+          PROMPT="You are reviewing a GitHub pull request for a Visual Search Engine project.
+          The project has:
+          - Backend: FastAPI (Python) with AI models (SmolVLM2, CLIP) and Weaviate vector database
+          - Frontend: React 19 + TypeScript with Vite
+
+          Please review the following code changes and provide feedback focusing on:
+          1. **Security vulnerabilities** - Look for injection attacks, authentication issues, XSS, file handling issues, etc.
+          2. **Code quality** - Unused code, complex logic, poor error handling, missing validation
+          3. **Performance issues** - Inefficient algorithms, unnecessary computations, memory leaks
+          4. **Potential bugs** - Edge cases, null handling, race conditions, validation errors
+
+          Here are the code changes:
+
+          \`\`\`diff
+          $DIFF
+          \`\`\`
+
+          Provide your review in markdown format with:
+          - 🔴 **Critical Issues** (must fix before merge)
+          - 🟡 **Suggestions** (recommended improvements)
+          - 🟢 **Good Practices** (what's done well)
+
+          Be specific with file paths and line numbers. Keep it concise and actionable."
+
+          # Call Z.AI GLM API
+          # Note: Adjust API endpoint and format based on Z.AI's actual API
+          REVIEW=$(curl -s --max-time 60 \
+            -H "Authorization: Bearer ${{ secrets.ZAI_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "model": "glm-4-flash",
+              "messages": [{
+                "role": "user",
+                "content": '"$(echo "$PROMPT" | jq -Rs .)"'
+              }],
+              "temperature": 0.3,
+              "max_tokens": 4096
+            }' \
+            "https://open.bigmodel.cn/api/paas/v4/chat/completions")
+
+          # Extract the review text from GLM's response
+          # Adjust this based on Z.AI's actual response format
+          REVIEW_TEXT=$(echo "$REVIEW" | jq -r '.choices[0].message.content // "Error: Unable to get review from Z.AI API"')
+
+          # If the above doesn't work, try alternative response formats
+          if [ "$REVIEW_TEXT" = "Error: Unable to get review from Z.AI API" ]; then
+            # Try alternative format (some APIs use 'data' array)
+            REVIEW_TEXT=$(echo "$REVIEW" | jq -r '.data[0].message.content // .message.content // "Error: Check API response format"')
+          fi
+
+          # Save review to file
+          echo "$REVIEW_TEXT" > /tmp/glm_review.txt
+
+          # Log for debugging
+          echo "Review completed. Response saved."
+          echo "review_completed=true" >> $GITHUB_OUTPUT
+          echo "review_size=$(echo "$REVIEW_TEXT" | wc -c)" >> $GITHUB_OUTPUT
+
+          # Save full API response for debugging (only in logs, not in output)
+          echo "$REVIEW" > /tmp/api_response.json
+
+      - name: Debug API response (if failed)
+        if: steps.review.outputs.review_completed != 'true'
+        run: |
+          echo "API Response:"
+          cat /tmp/api_response.json || echo "No response saved"
+          echo "Diff content:"
+          head -n 50 /tmp/pr_diff.txt
+
+      - name: Post review as PR comment
+        if: steps.review.outputs.review_completed == 'true'
+        run: |
+          REVIEW_BODY="## 🤖 Z.AI GLM Code Review
+
+          $(cat /tmp/glm_review.txt)
+
+          ---
+          **Configuration**
+          - Model: GLM-4-Flash
+          - Focus: Security + Code Quality
+          - Lines Changed: ${{ steps.diff.outputs.diff_size }}
+
+          *This is an automated review by Z.AI's GLM model. Please use it as a guide, but always apply human judgment.*"
+
+          gh pr comment \
+            --body "$REVIEW_BODY" \
+            --edit-last-comment || \
+          gh pr comment \
+            --body "$REVIEW_BODY"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add label
+        if: steps.review.outputs.review_completed == 'true'
+        run: |
+          gh pr edit --add-label "glm-reviewed"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
