@@ -25,7 +25,6 @@ jobs:
         uses: tarmojussila/zai-code-review@v0.3.0
         with:
           ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
-          ZAI_MODEL: glm-4-flash
           ZAI_REVIEWER_NAME: Z.AI Code Reviewer
           ZAI_SYSTEM_PROMPT: |
             You are reviewing a GitHub pull request for a Visual Search Engine project.
