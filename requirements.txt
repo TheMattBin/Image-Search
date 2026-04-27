@@ -1,6 +1,6 @@
 transformers>=5.6.2
 cryptography>=46.0.5
-pillow>=10.3.0
+pillow>=12.2.0
 weaviate-client>=4.5.0
 python-dotenv>=1.2.2
 huggingface_hub[hf_xet]>=0.23.0
