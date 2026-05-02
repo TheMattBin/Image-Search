@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Wait for checks to complete
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { owner, repo, number: pull_number } = context.issue;
@@ -101,7 +101,7 @@ jobs:
 
       - name: Get Dependabot metadata
         id: dependabot-metadata
-        uses: dependabot/fetch-metadata@v2
+        uses: dependabot/fetch-metadata@v3
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
@@ -134,7 +134,7 @@ jobs:
 
       - name: Comment on auto-merge
         if: steps.dependabot-metadata.outputs.update-type == 'version-update:semver-patch' || steps.dependabot-metadata.outputs.update-type == 'version-update:semver-minor' || steps.dependabot-metadata.outputs.update-type == 'version-update:semver-major' || contains(github.event.pull_request.title, 'security')
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { owner, repo, number: pull_number } = context.issue;
