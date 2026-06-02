@@ -6,6 +6,6 @@ python-dotenv>=1.2.2
 huggingface_hub[hf_xet]>=1.17.0
 fastapi>=0.136.1
 uvicorn>=0.48.0
-python-multipart>=0.0.29
+python-multipart>=0.0.30
 flickrapi>=2.4.0
 tqdm>=4.67.3
