@@ -1,5 +1,5 @@
 transformers>=5.10.2
-cryptography>=48.0.0
+cryptography>=49.0.0
 pillow>=12.2.0
 weaviate-client>=4.21.3
 python-dotenv>=1.2.2
