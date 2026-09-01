@@ -1,4 +1,4 @@
-transformers>=5.15.1
+transformers>=5.16.1
 cryptography>=50.0.1
 pillow>=12.3.0
 weaviate-client>=4.23.0
