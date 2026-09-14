@@ -1,7 +1,7 @@
 transformers>=5.17.0
 cryptography>=50.0.1
 pillow>=12.3.0
-weaviate-client>=4.23.0
+weaviate-client>=4.23.1
 python-dotenv>=1.2.3
 huggingface_hub[hf_xet]>=1.31.0
 fastapi>=0.141.1
